@@ -2,7 +2,7 @@
 
 **Your shell, with AI built in.**
 
-pish wraps bash or zsh transparently. Every command you know works exactly as before — zero overhead. When you type something the shell doesn't recognize, an AI agent ([pi](https://github.com/mariozechner/pi-coding-agent)) kicks in automatically.
+pish wraps bash or zsh transparently. Every command you know works exactly as before — zero overhead. When you type something the shell doesn't recognize, an AI agent ([pi](https://github.com/badlogic/pi-mono)) kicks in automatically.
 
 ```
 ❯ ls -la                          # normal shell, as always
@@ -32,7 +32,7 @@ Agent output goes to **stderr**, never contaminating your shell's stdout. Your p
 **Requirements:**
 - Node.js ≥ 18
 - bash ≥ 4.4 or zsh ≥ 5.0
-- [`pi`](https://github.com/mariozechner/pi-coding-agent) installed and on PATH
+- [`pi`](https://github.com/badlogic/pi-mono) installed and on PATH
 
 ### Install from npm
 
