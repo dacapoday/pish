@@ -1,0 +1,25 @@
+#!/usr/bin/expect -f
+# Context limit: PISH_MAX_CONTEXT=3 keeps only the latest 3 entries
+set timeout 15
+catch {unset env(PISH_PID)}
+set env(PISH_MAX_CONTEXT) 3
+spawn node [file dirname [info script]]/../../dist/main.js
+expect -re {PISH_READY} {}
+sleep 0.1
+send "echo cmd1\r"
+expect -re {PISH_READY} {}
+sleep 0.1
+send "echo cmd2\r"
+expect -re {PISH_READY} {}
+sleep 0.1
+send "echo cmd3\r"
+expect -re {PISH_READY} {}
+sleep 0.1
+send "echo cmd4\r"
+expect -re {PISH_READY} {}
+sleep 0.1
+send "echo cmd5\r"
+expect -re {PISH_READY} {}
+sleep 0.1
+send "exit\r"
+expect eof

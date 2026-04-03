@@ -1,0 +1,23 @@
+#!/usr/bin/expect -f
+# reverse: agent → pi → reverse_done session recovery
+set timeout 60
+catch {unset env(PISH_PID)}
+spawn node [file dirname [info script]]/../../dist/main.js
+# Wait for initial prompt
+expect -re {PISH_READY} {}
+sleep 0.1
+# Trigger agent to create a session
+send "pish_test_agent hi\r"
+# Wait for prompt after agent completes
+expect -re {PISH_READY} {}
+sleep 0.1
+# reverse: pi --session <path>
+send "pi\r"
+sleep 5
+# Exit pi (Ctrl+D = EOF)
+send "\x04"
+# Wait for prompt
+expect -re {PISH_READY} {}
+sleep 0.1
+send "exit\r"
+expect eof

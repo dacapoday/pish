@@ -1,0 +1,17 @@
+#!/usr/bin/expect -f
+set timeout 45
+catch {unset env(PISH_PID)}
+spawn node [file dirname [info script]]/../../dist/main.js
+# Wait for initial prompt
+expect -re {PISH_READY} {}
+sleep 0.1
+send "pish_test_agent hello\r"
+# Wait for prompt after agent completes
+expect -re {PISH_READY} {}
+sleep 0.1
+send "echo after_agent\r"
+# Wait for prompt
+expect -re {PISH_READY} {}
+sleep 0.1
+send "exit\r"
+expect eof

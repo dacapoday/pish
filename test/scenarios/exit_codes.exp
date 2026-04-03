@@ -1,0 +1,17 @@
+#!/usr/bin/expect -f
+set timeout 10
+catch {unset env(PISH_PID)}
+spawn node [file dirname [info script]]/../../dist/main.js
+expect -re {PISH_READY} {}
+sleep 0.1
+send "false\r"
+expect -re {PISH_READY} {}
+sleep 0.1
+send "bash -c 'exit 42'\r"
+expect -re {PISH_READY} {}
+sleep 0.1
+send "echo ok\r"
+expect -re {PISH_READY} {}
+sleep 0.1
+send "exit\r"
+expect eof

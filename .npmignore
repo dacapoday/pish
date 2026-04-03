@@ -1,0 +1,15 @@
+# Source & config
+src/
+tsconfig.json
+AGENTS.md
+docs/
+prompts/
+
+# Tests
+test/
+
+# Dev files
+.gitignore
+.github/
+biome.json
+tsconfig.test.json

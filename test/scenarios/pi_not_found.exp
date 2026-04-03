@@ -1,0 +1,24 @@
+#!/usr/bin/expect -f
+# pi on PATH but execs a nonexistent binary → agent_error → prompt returns
+set timeout 15
+catch {unset env(PISH_PID)}
+
+# Create fake pi (execs nonexistent binary → ENOENT)
+set tmpbin [exec mktemp -d]
+set fd [open "$tmpbin/pi" w]
+puts $fd "#!/bin/sh\nexec /nonexistent_binary_xyz 2>/dev/null\nexit 127"
+close $fd
+exec chmod +x "$tmpbin/pi"
+set env(PATH) "$tmpbin:$env(PATH)"
+
+spawn node [file dirname [info script]]/../../dist/main.js
+expect -re {PISH_READY} {}
+sleep 0.1
+send "pish_test_agent hello\r"
+# After agent_error, prompt should return
+expect -re {PISH_READY} {}
+sleep 0.1
+send "exit\r"
+expect eof
+
+exec rm -rf $tmpbin

@@ -1,0 +1,16 @@
+#!/usr/bin/expect -f
+set timeout 30
+catch {unset env(PISH_PID)}
+spawn node [file dirname [info script]]/../../dist/main.js
+# Wait for initial prompt
+expect -re {PISH_READY} {}
+sleep 0.1
+send "refactor everything\r"
+# Wait for agent to start (spinner or text), then Ctrl+C
+sleep 3
+send "\x03"
+# Wait for prompt
+expect -re {PISH_READY} {}
+sleep 0.1
+send "exit\r"
+expect eof

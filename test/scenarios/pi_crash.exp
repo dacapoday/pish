@@ -1,0 +1,24 @@
+#!/usr/bin/expect -f
+# pi crashes immediately after spawn → agent_error → prompt returns
+set timeout 15
+catch {unset env(PISH_PID)}
+
+# Create fake pi (exits 42 immediately)
+set tmpbin [exec mktemp -d]
+set fd [open "$tmpbin/pi" w]
+puts $fd "#!/bin/sh\nsleep 0.1\nexit 42"
+close $fd
+exec chmod +x "$tmpbin/pi"
+set env(PATH) "$tmpbin:$env(PATH)"
+
+spawn node [file dirname [info script]]/../../dist/main.js
+expect -re {PISH_READY} {}
+sleep 0.1
+send "pish_test_agent hello\r"
+# After agent_error, prompt should return
+expect -re {PISH_READY} {}
+sleep 0.1
+send "exit\r"
+expect eof
+
+exec rm -rf $tmpbin

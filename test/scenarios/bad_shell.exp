@@ -1,0 +1,7 @@
+#!/usr/bin/expect -f
+# PISH_SHELL=fish (unsupported) → exit 1
+set timeout 5
+catch {unset env(PISH_PID)}
+set env(PISH_SHELL) fish
+spawn node [file dirname [info script]]/../../dist/main.js
+expect eof

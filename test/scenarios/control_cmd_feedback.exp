@@ -1,0 +1,15 @@
+#!/usr/bin/expect -f
+# Control commands with real pi: verify RPC feedback rendering
+set timeout 30
+catch {unset env(PISH_PID)}
+spawn node [file dirname [info script]]/../../dist/main.js
+expect -re {PISH_READY} {}
+sleep 0.1
+send "/model sonnet\r"
+expect -re {PISH_READY} {}
+sleep 0.1
+send "/think high\r"
+expect -re {PISH_READY} {}
+sleep 0.1
+send "exit\r"
+expect eof

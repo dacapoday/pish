@@ -1,0 +1,47 @@
+{
+  "name": "pish",
+  "version": "0.8.0",
+  "description": "A shell-first pi coding agent",
+  "license": "MIT",
+  "author": "dacapoday",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dacapoday/pish.git"
+  },
+  "homepage": "https://github.com/dacapoday/pish",
+  "bugs": {
+    "url": "https://github.com/dacapoday/pish/issues"
+  },
+  "keywords": ["shell", "ai", "coding-agent", "bash", "zsh", "pi", "cli"],
+  "engines": {
+    "node": ">=18"
+  },
+  "type": "module",
+  "bin": {
+    "pish": "dist/main.js"
+  },
+  "scripts": {
+    "build": "tsc && tsc -p tsconfig.test.json && chmod +x dist/main.js",
+    "clean": "rm -rf dist",
+    "start": "node dist/main.js",
+    "dev": "tsc --watch",
+    "lint": "biome check src/ test/",
+    "test": "bash test/run_tests.sh",
+    "test:unit": "npx tsx --test test/unit/*.test.ts"
+  },
+  "files": [
+    "dist",
+    "!dist/test",
+    "README.md"
+  ],
+  "dependencies": {
+    "@mariozechner/pi-tui": "^0.64.0",
+    "@xterm/headless": "^6.0.0",
+    "node-pty": "^1.0.0"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.4.10",
+    "@types/node": "^22.0.0",
+    "typescript": "^5.0.0"
+  }
+}
