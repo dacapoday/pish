@@ -4,3 +4,5 @@ dist/
 !assets/**
 .DS_Store
 /tmp/
+AGENTS.md
+docs/
