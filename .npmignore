@@ -2,7 +2,7 @@
 src/
 tsconfig.json
 AGENTS.md
-docs/
+devdocs/
 prompts/
 
 # Tests
