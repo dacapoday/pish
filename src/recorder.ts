@@ -10,13 +10,7 @@
 
 import { log } from './log.js';
 import { OscParser, type Signal } from './osc.js';
-import {
-  DEFAULT_TRUNCATE,
-  isAltScreen,
-  stripAnsi,
-  type TruncateOptions,
-  truncateLines,
-} from './strip.js';
+import { isAltScreen, stripAnsi, truncateLines } from './strip.js';
 import { vtermReplay } from './vterm.js';
 
 export interface ContextEntry {
@@ -35,16 +29,21 @@ export type RecorderEvent =
   | { type: 'error'; msg: string };
 
 export interface RecorderOptions {
-  /** Max context history entries; oldest discarded when exceeded. Default: 20 */
+  /** Max context history entries; oldest discarded when exceeded. */
   maxContext: number;
-  /** Truncation params (line width, head/tail lines) */
-  truncate: TruncateOptions;
+  /** Lines to keep from the beginning of command output. */
+  headLines: number;
+  /** Lines to keep from the end of command output. */
+  tailLines: number;
+  /** Max characters per line (excess truncated). */
+  lineWidth: number;
+  /** Trim fullBuffer when segStart exceeds this threshold (bytes). */
+  compactBufferThreshold: number;
+  /** Default terminal columns for vterm replay. */
+  defaultCols: number;
+  /** Default terminal rows for vterm replay. */
+  defaultRows: number;
 }
-
-const DEFAULT_OPTIONS: RecorderOptions = {
-  maxContext: 20,
-  truncate: DEFAULT_TRUNCATE,
-};
 
 export class Recorder {
   /**
@@ -64,16 +63,33 @@ export class Recorder {
   private gotFirstD = false;
   private pending: Promise<void> = Promise.resolve();
 
+  /** Current terminal dimensions (updated via updateSize). */
+  private cols: number;
+  private rows: number;
+
   private readonly opts: RecorderOptions;
   private readonly oscParser = new OscParser();
 
   /** Committed context entries. */
-  readonly context: ContextEntry[] = [];
+  private readonly context: ContextEntry[] = [];
 
   private _onEvent: ((evt: RecorderEvent) => void) | null = null;
 
-  constructor(opts?: Partial<RecorderOptions>) {
-    this.opts = { ...DEFAULT_OPTIONS, ...opts };
+  constructor(opts: RecorderOptions) {
+    this.opts = opts;
+    this.cols = opts.defaultCols;
+    this.rows = opts.defaultRows;
+  }
+
+  /** Number of committed context entries. */
+  get contextCount(): number {
+    return this.context.length;
+  }
+
+  /** Update terminal dimensions (called on resize). */
+  updateSize(cols: number, rows: number): void {
+    this.cols = cols;
+    this.rows = rows;
   }
 
   onEvent(cb: (evt: RecorderEvent) => void): void {
@@ -184,15 +200,16 @@ export class Recorder {
       const promptRaw = segData.slice(0, cRel);
       const outputRaw = segData.slice(cRel);
 
-      promptText = await vtermReplay(promptRaw);
+      promptText = await vtermReplay(promptRaw, this.cols, this.rows);
 
       if (isAltScreen(outputRaw)) {
         outputText = '[full-screen app]';
       } else {
-        outputText = truncateLines(
-          stripAnsi(outputRaw).trim(),
-          this.opts.truncate,
-        );
+        outputText = truncateLines(stripAnsi(outputRaw).trim(), {
+          headLines: this.opts.headLines,
+          tailLines: this.opts.tailLines,
+          lineWidth: this.opts.lineWidth,
+        });
       }
     } else {
       // No C = no command executed (empty enter, etc.)
@@ -228,7 +245,7 @@ export class Recorder {
 
   /** Release memory periodically (fullBuffer grows indefinitely). */
   private maybeCompact(): void {
-    if (this.segStart > 100_000) {
+    if (this.segStart > this.opts.compactBufferThreshold) {
       this.fullBuffer = this.fullBuffer.slice(this.segStart);
       if (this.cAbs !== null) this.cAbs -= this.segStart;
       this.segStart = 0;

@@ -26,14 +26,8 @@ export interface TruncateOptions {
   /** Lines to keep from the end. */
   tailLines: number;
   /** Max characters per line (excess truncated with ' ...'). */
-  maxLineWidth: number;
+  lineWidth: number;
 }
-
-export const DEFAULT_TRUNCATE: TruncateOptions = {
-  headLines: 50,
-  tailLines: 30,
-  maxLineWidth: 512,
-};
 
 /**
  * Line-level truncation: keep head + tail lines, truncate the middle.
@@ -42,16 +36,13 @@ export const DEFAULT_TRUNCATE: TruncateOptions = {
  * Head > tail ratio: command output typically starts with structured info
  * (headers, column names, first results); tail preserves errors and final results.
  */
-export function truncateLines(
-  text: string,
-  opts: TruncateOptions = DEFAULT_TRUNCATE,
-): string {
+export function truncateLines(text: string, opts: TruncateOptions): string {
   let lines = text.split('\n');
 
   // Per-line truncation
   lines = lines.map((line) => {
-    if (line.length > opts.maxLineWidth) {
-      return `${line.slice(0, opts.maxLineWidth)} ...`;
+    if (line.length > opts.lineWidth) {
+      return `${line.slice(0, opts.lineWidth)} ...`;
     }
     return line;
   });

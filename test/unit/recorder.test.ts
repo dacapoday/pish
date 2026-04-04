@@ -4,7 +4,22 @@
 
 import * as assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { Recorder, type RecorderEvent } from '../../src/recorder.js';
+import {
+  Recorder,
+  type RecorderEvent,
+  type RecorderOptions,
+} from '../../src/recorder.js';
+
+/** Default test options for Recorder. */
+const TEST_OPTS: RecorderOptions = {
+  maxContext: 20,
+  headLines: 50,
+  tailLines: 30,
+  lineWidth: 512,
+  compactBufferThreshold: 100_000,
+  defaultCols: 120,
+  defaultRows: 30,
+};
 
 // ── Helpers ──
 
@@ -46,7 +61,7 @@ function collectEvents(
 
 describe('Recorder', () => {
   it('emits shell_ready on S signal', async () => {
-    const r = new Recorder();
+    const r = new Recorder(TEST_OPTS);
     const events = await collectEvents(r, () => {
       r.feed(osc('S'));
     });
@@ -54,13 +69,13 @@ describe('Recorder', () => {
   });
 
   it('strips OSC from clean output', () => {
-    const r = new Recorder();
+    const r = new Recorder(TEST_OPTS);
     const clean = r.feed(`hello${osc('S')}world`);
     assert.equal(clean, 'helloworld');
   });
 
   it('first D is discarded (startup garbage)', async () => {
-    const r = new Recorder();
+    const r = new Recorder(TEST_OPTS);
     const events = await collectEvents(r, () => {
       r.feed(`garbage${osc('D;0')}`);
     });
@@ -69,7 +84,7 @@ describe('Recorder', () => {
   });
 
   it('emits context_skip for empty enter (no C)', async () => {
-    const r = new Recorder();
+    const r = new Recorder(TEST_OPTS);
     const events = await collectEvents(r, () => {
       // First D (discarded)
       r.feed(osc('D;0'));
@@ -85,7 +100,7 @@ describe('Recorder', () => {
   });
 
   it('emits context for normal command (D → C → output → D)', async () => {
-    const r = new Recorder();
+    const r = new Recorder(TEST_OPTS);
     const events = await collectEvents(r, () => {
       r.feed(osc('D;0')); // first D, discarded
       r.feed(`$ echo hi${osc('C')}hi\n${osc('D;0')}`);
@@ -99,7 +114,7 @@ describe('Recorder', () => {
   });
 
   it('captures exit code from D signal', async () => {
-    const r = new Recorder();
+    const r = new Recorder(TEST_OPTS);
     const events = await collectEvents(r, () => {
       r.feed(osc('D;0'));
       r.feed(`$ false${osc('C')}error output\n${osc('D;42')}`);
@@ -112,7 +127,7 @@ describe('Recorder', () => {
   });
 
   it('skips empty output with rc=0 (no_output)', async () => {
-    const r = new Recorder();
+    const r = new Recorder(TEST_OPTS);
     const events = await collectEvents(r, () => {
       r.feed(osc('D;0'));
       // Command with C but no output (e.g. `true`)
@@ -125,7 +140,7 @@ describe('Recorder', () => {
   });
 
   it('keeps entries with rc!=0 even without output', async () => {
-    const r = new Recorder();
+    const r = new Recorder(TEST_OPTS);
     const events = await collectEvents(r, () => {
       r.feed(osc('D;0'));
       r.feed(`$ false${osc('C')}${osc('D;1')}`);
@@ -142,10 +157,7 @@ describe('Recorder', () => {
   });
 
   it('respects maxContext limit', async () => {
-    const r = new Recorder({
-      maxContext: 2,
-      truncate: { headLines: 50, tailLines: 30, maxLineWidth: 512 },
-    });
+    const r = new Recorder({ ...TEST_OPTS, maxContext: 2 });
     await collectEvents(r, () => {
       r.feed(osc('D;0'));
       r.feed(`$ cmd1${osc('C')}out1\n${osc('D;0')}`);
@@ -158,7 +170,7 @@ describe('Recorder', () => {
   });
 
   it('drain() returns and clears context', async () => {
-    const r = new Recorder();
+    const r = new Recorder(TEST_OPTS);
     await collectEvents(r, () => {
       r.feed(osc('D;0'));
       r.feed(`$ echo hi${osc('C')}hi\n${osc('D;0')}`);
@@ -170,7 +182,7 @@ describe('Recorder', () => {
   });
 
   it('emits agent event on P signal and discards next D', async () => {
-    const r = new Recorder();
+    const r = new Recorder(TEST_OPTS);
     const events = await collectEvents(r, () => {
       r.feed(osc('D;0'));
       r.feed(`prompt${osc('C')}${osc('P;fix the bug')}`);
@@ -187,7 +199,7 @@ describe('Recorder', () => {
   });
 
   it('emits reverse and reverse_done events', async () => {
-    const r = new Recorder();
+    const r = new Recorder(TEST_OPTS);
     const events = await collectEvents(r, () => {
       r.feed(osc('D;0'));
       r.feed(`prompt${osc('C')}${osc('R')}`);
@@ -198,7 +210,7 @@ describe('Recorder', () => {
   });
 
   it('emits error on E signal', async () => {
-    const r = new Recorder();
+    const r = new Recorder(TEST_OPTS);
     const events = await collectEvents(r, () => {
       r.feed(osc('E;bash 3.2 not supported'));
     });
@@ -210,7 +222,7 @@ describe('Recorder', () => {
   });
 
   it('handles alt screen output', async () => {
-    const r = new Recorder();
+    const r = new Recorder(TEST_OPTS);
     const events = await collectEvents(r, () => {
       r.feed(osc('D;0'));
       r.feed(
@@ -225,7 +237,7 @@ describe('Recorder', () => {
   });
 
   it('compacts fullBuffer when segStart > 100KB', async () => {
-    const r = new Recorder();
+    const r = new Recorder(TEST_OPTS);
     r.feed(osc('D;0')); // first D
 
     // Feed >100KB of data, then wait for async D via collectEvents

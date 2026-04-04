@@ -34,7 +34,7 @@ if (process.env.PISH_PID) {
 // ═══════════════════════════════════════
 
 const cfg = loadConfig();
-initLog();
+initLog(cfg.logTarget);
 
 // ── Infrastructure ──
 
@@ -48,14 +48,19 @@ const rcPath = generateRcfile({ shell: cfg.shell, fifoPath, tmpDir });
 
 const recorder = new Recorder({
   maxContext: cfg.maxContext,
-  truncate: {
-    headLines: cfg.headLines,
-    tailLines: cfg.tailLines,
-    maxLineWidth: cfg.lineWidth,
-  },
+  headLines: cfg.headLines,
+  tailLines: cfg.tailLines,
+  lineWidth: cfg.lineWidth,
+  compactBufferThreshold: cfg.compactBufferThreshold,
+  defaultCols: cfg.defaultCols,
+  defaultRows: cfg.defaultRows,
 });
 
-const agent = new AgentManager(cfg.piPath);
+const agent = new AgentManager({
+  piPath: cfg.piPath,
+  rpcTimeout: cfg.rpcTimeout,
+  killTimeout: cfg.killTimeout,
+});
 
 // ── PTY ──
 
@@ -75,8 +80,8 @@ if (cfg.shell === 'zsh') {
 
 const ptyProcess = pty.spawn(cfg.shellPath, shellArgs, {
   name: 'xterm-256color',
-  cols: process.stdout.columns || 120,
-  rows: process.stdout.rows || 30,
+  cols: process.stdout.columns || cfg.defaultCols,
+  rows: process.stdout.rows || cfg.defaultRows,
   cwd: process.cwd(),
   env,
 });
@@ -100,7 +105,10 @@ process.stdin.resume();
 process.stdin.on('data', (data) => app.onStdin(data));
 
 process.stdout.on('resize', () => {
-  app.onResize(process.stdout.columns || 120, process.stdout.rows || 30);
+  app.onResize(
+    process.stdout.columns || cfg.defaultCols,
+    process.stdout.rows || cfg.defaultRows,
+  );
 });
 
 // ═══════════════════════════════════════

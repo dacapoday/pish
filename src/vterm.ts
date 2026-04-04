@@ -45,8 +45,8 @@ function getTerm(cols: number, rows: number): InstanceType<typeof Terminal> {
  */
 export function vtermReplay(
   data: string,
-  cols = 120,
-  rows = 30,
+  cols: number,
+  rows: number,
 ): Promise<string> {
   return new Promise((resolve) => {
     const term = getTerm(cols, rows);

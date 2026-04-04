@@ -13,15 +13,17 @@ import {
   visibleWidth,
 } from '@mariozechner/pi-tui';
 import type { AgentEvent, AgentUsage, RpcResponse } from './agent.js';
-import type { Config } from './config.js';
 import { bold, createMarkdownTheme, dim, TAG, theme, toolBg } from './theme.js';
 
 // ─── Banner / Exit / Control ───
 
-export function printBanner(cfg: Config): void {
-  if (cfg.noBanner) return;
-  const parts = [`v${cfg.version}`, dim(cfg.shell)];
-  if (cfg.noAgent) parts.push(theme.warning('no-agent'));
+export function printBanner(
+  version: string,
+  shell: string,
+  flags?: { noAgent?: boolean },
+): void {
+  const parts = [`v${version}`, dim(shell)];
+  if (flags?.noAgent) parts.push(theme.warning('no-agent'));
   process.stderr.write(`${TAG} ${parts.join(dim(' │ '))}\n`);
 }
 
@@ -87,7 +89,10 @@ export function printNotice(msg: string): void {
 
 const SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
 
-export function startSpinner(label: string): () => void {
+export function startSpinner(
+  label: string,
+  intervalMs: number,
+): () => void {
   let frame = 0;
   let stopped = false;
 
@@ -109,7 +114,7 @@ export function startSpinner(label: string): () => void {
     frame++;
   };
   render();
-  const timer = setInterval(render, 80);
+  const timer = setInterval(render, intervalMs);
   return () => {
     if (stopped) return;
     stopped = true;
@@ -121,7 +126,7 @@ export function startSpinner(label: string): () => void {
 // ─── Helpers ───
 
 function termWidth(): number {
-  return process.stderr.columns || 80;
+  return process.stderr.columns || FALLBACK_TERM_WIDTH;
 }
 
 function flush(comp: { render(width: number): string[] }): void {
@@ -135,6 +140,13 @@ function shortenPath(p: string): string {
   if (home && p.startsWith(home)) return `~${p.slice(home.length)}`;
   return p;
 }
+
+/** Max visible chars for generic tool-title arg truncation. */
+const TOOL_TITLE_MAX_CHARS = 60;
+/** Max visible chars for compaction summary. */
+const COMPACTION_SUMMARY_MAX_CHARS = 80;
+/** Default terminal width when stderr columns is unknown. */
+const FALLBACK_TERM_WIDTH = 80;
 
 function truncate(s: string, max: number): string {
   const flat = s.replace(/\n/g, ' ');
@@ -171,7 +183,7 @@ function formatToolTitle(
   }
   const keys = Object.keys(args);
   if (keys.length > 0)
-    return `${toolName} ${truncate(String(args[keys[0]]), 60)}`;
+    return `${toolName} ${truncate(String(args[keys[0]]), TOOL_TITLE_MAX_CHARS)}`;
   return toolName;
 }
 
@@ -272,11 +284,13 @@ export class StreamRenderer {
   private stopSpinner: (() => void) | null = null;
   private mdTheme: MarkdownTheme;
   private pendingTools: Map<string, string> = new Map();
-  private toolResultLines: number;
+  private readonly toolResultLines: number;
+  private readonly spinnerInterval: number;
 
-  constructor(toolResultLines = 10) {
+  constructor(toolResultLines: number, spinnerInterval: number) {
     this.mdTheme = createMarkdownTheme();
     this.toolResultLines = toolResultLines;
+    this.spinnerInterval = spinnerInterval;
   }
 
   handleEvent(event: AgentEvent): void {
@@ -331,7 +345,7 @@ export class StreamRenderer {
 
   showSpinner(): void {
     process.stderr.write('\x1b[?25l'); // hide cursor
-    this.stopSpinner = startSpinner('Working...');
+    this.stopSpinner = startSpinner('Working...', this.spinnerInterval);
   }
 
   // ─── Thinking ───
@@ -406,7 +420,7 @@ export class StreamRenderer {
     this.clearSpinner();
     const title = formatToolTitle(toolName, args);
     this.pendingTools.set(toolCallId, title);
-    this.stopSpinner = startSpinner(title);
+    this.stopSpinner = startSpinner(title, this.spinnerInterval);
   }
 
   private onToolEnd(
@@ -455,7 +469,7 @@ export class StreamRenderer {
       reason === 'overflow'
         ? 'Context overflow — auto-compacting...'
         : 'Auto-compacting...';
-    this.stopSpinner = startSpinner(reasonText);
+    this.stopSpinner = startSpinner(reasonText, this.spinnerInterval);
   }
 
   private onCompactionEnd(
@@ -470,7 +484,9 @@ export class StreamRenderer {
       process.stderr.write(`${theme.error('✗')} compaction failed: ${error}\n`);
     } else if (summary) {
       const short =
-        summary.length > 80 ? `${summary.slice(0, 77)}...` : summary;
+        summary.length > COMPACTION_SUMMARY_MAX_CHARS
+          ? `${summary.slice(0, COMPACTION_SUMMARY_MAX_CHARS - 3)}...`
+          : summary;
       process.stderr.write(
         `${theme.accent('●')} compacted: ${theme.muted(short)}\n`,
       );
@@ -521,7 +537,7 @@ export class StreamRenderer {
   }
 
   private restartSpinner(): void {
-    this.stopSpinner = startSpinner('Working...');
+    this.stopSpinner = startSpinner('Working...', this.spinnerInterval);
   }
 
   private countCursorLinesFromStart(text: string): number {

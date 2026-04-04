@@ -55,7 +55,7 @@ describe('truncateLines', () => {
   it('returns short text unchanged', () => {
     const text = 'line1\nline2\nline3';
     assert.equal(
-      truncateLines(text, { headLines: 50, tailLines: 30, maxLineWidth: 512 }),
+      truncateLines(text, { headLines: 50, tailLines: 30, lineWidth: 512 }),
       text,
     );
   });
@@ -65,7 +65,7 @@ describe('truncateLines', () => {
     const result = truncateLines(long, {
       headLines: 50,
       tailLines: 30,
-      maxLineWidth: 100,
+      lineWidth: 100,
     });
     assert.ok(result.endsWith(' ...'));
     assert.equal(result.length, 104); // 100 + ' ...'
@@ -76,7 +76,7 @@ describe('truncateLines', () => {
     const result = truncateLines(lines.join('\n'), {
       headLines: 5,
       tailLines: 3,
-      maxLineWidth: 512,
+      lineWidth: 512,
     });
     const parts = result.split('\n');
     assert.equal(parts[0], 'line0');
@@ -91,7 +91,7 @@ describe('truncateLines', () => {
     const lines = Array.from({ length: 10 }, (_, i) => `line${i}`);
     const text = lines.join('\n');
     assert.equal(
-      truncateLines(text, { headLines: 5, tailLines: 5, maxLineWidth: 512 }),
+      truncateLines(text, { headLines: 5, tailLines: 5, lineWidth: 512 }),
       text,
     );
   });

@@ -15,11 +15,29 @@ const require = createRequire(import.meta.url);
 
 export const DEFAULTS = {
   shell: 'bash',
+
+  // Context truncation
   maxContext: 20,
   headLines: 50,
   tailLines: 30,
   lineWidth: 512,
+
+  // Rendering
   toolResultLines: 10,
+
+  // Timeouts (ms)
+  rpcTimeout: 30_000,           // default RPC response timeout
+  compactTimeout: 60_000,       // /compact needs LLM generation — much longer
+  killTimeout: 2_000,           // SIGTERM → SIGKILL escalation wait
+  stdinReplayDelay: 50,         // wait for shell readline ready after agent exit
+
+  // Terminal defaults (PTY spawn + vterm replay fallback)
+  defaultCols: 120,
+  defaultRows: 30,
+
+  // Internal limits
+  compactBufferThreshold: 100_000,  // recorder fullBuffer trim threshold (bytes)
+  spinnerInterval: 80,              // spinner animation frame interval (ms)
 } as const;
 
 // ── Config type ──
@@ -44,6 +62,26 @@ export interface Config {
 
   // ── Rendering ──
   toolResultLines: number;
+
+  // ── Timeouts (ms) ──
+  rpcTimeout: number;
+  compactTimeout: number;
+  killTimeout: number;
+  stdinReplayDelay: number;
+
+  // ── Terminal defaults ──
+  defaultCols: number;
+  defaultRows: number;
+
+  // ── Internal limits ──
+  compactBufferThreshold: number;
+  spinnerInterval: number;
+
+  /** Debug log file path (null = disabled). */
+  debugPath: string | null;
+
+  /** Structured event log target: 'stderr', file path, or null (disabled). */
+  logTarget: string | null;
 
   /** Hide startup banner */
   noBanner: boolean;
@@ -229,6 +267,16 @@ export function loadConfig(): Config {
     tailLines: envInt('PISH_TAIL_LINES', DEFAULTS.tailLines),
     lineWidth: envInt('PISH_LINE_WIDTH', DEFAULTS.lineWidth),
     toolResultLines: envInt('PISH_TOOL_LINES', DEFAULTS.toolResultLines),
+    rpcTimeout: DEFAULTS.rpcTimeout,
+    compactTimeout: DEFAULTS.compactTimeout,
+    killTimeout: DEFAULTS.killTimeout,
+    stdinReplayDelay: DEFAULTS.stdinReplayDelay,
+    defaultCols: DEFAULTS.defaultCols,
+    defaultRows: DEFAULTS.defaultRows,
+    compactBufferThreshold: DEFAULTS.compactBufferThreshold,
+    spinnerInterval: DEFAULTS.spinnerInterval,
+    debugPath: process.env.PISH_DEBUG || null,
+    logTarget: process.env.PISH_LOG || null,
     noBanner: process.env.PISH_NO_BANNER === '1',
   };
 }

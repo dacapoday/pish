@@ -51,6 +51,15 @@ export type AgentEvent =
       error?: string;
     };
 
+/**
+ * LLM API token usage statistics for a completed agent run.
+ * Rendered in the status bar after agent_done:
+ *   ✓ ↑2.1k ↓340 R12k $0.003 1.8s
+ *
+ * Aggregated from two sources (whichever is available):
+ * - agent_end.messages[]  — preferred: sums usage across all messages in the run
+ * - message_end.usage     — fallback: last single-message usage (lastUsage)
+ */
 export interface AgentUsage {
   inputTokens: number;
   outputTokens: number;
@@ -106,15 +115,22 @@ function toRpcResponse(obj: Msg): RpcResponse {
   };
 }
 
+/** Configuration for AgentManager (subset of global Config). */
+export interface AgentConfig {
+  piPath: string;
+  rpcTimeout: number;
+  killTimeout: number;
+}
+
 export class AgentManager {
   private proc: ChildProcess | null = null;
   private buf = '';
-  private cb: AgentCallback | null = null;
+  private _onEvent: AgentCallback | null = null;
   private _running = false;
   private _submitted = false;
   private startTime = 0;
   private lastUsage: AgentUsage | null = null;
-  private piPath: string;
+  private readonly config: AgentConfig;
   private pendingRpc = new Map<
     string,
     {
@@ -123,14 +139,14 @@ export class AgentManager {
     }
   >();
 
-  /** Current session file path. Maintained by pish across agent process restarts. */
-  sessionFile: string | undefined;
+  /** Session file path. Maintained by pish across agent process restarts. */
+  private _sessionFile: string | undefined;
 
-  /** Crash info (in-memory), displayed on next enterAgentMode */
-  crashInfo: string | undefined;
+  /** Crash info (in-memory), displayed on next enterAgentMode. */
+  private _crashInfo: string | undefined;
 
-  constructor(piPath = 'pi') {
-    this.piPath = piPath;
+  constructor(config: AgentConfig) {
+    this.config = config;
   }
 
   get running(): boolean {
@@ -143,7 +159,7 @@ export class AgentManager {
   }
 
   onEvent(cb: AgentCallback): void {
-    this.cb = cb;
+    this._onEvent = cb;
   }
 
   /** Ensure the pi process is alive (lazy spawn). */
@@ -151,13 +167,13 @@ export class AgentManager {
     if (this.proc && !this.proc.killed) return;
 
     const args = ['--mode', 'rpc'];
-    if (this.sessionFile) {
-      args.push('--session', this.sessionFile);
+    if (this._sessionFile) {
+      args.push('--session', this._sessionFile);
     }
 
     log('agent_spawn', { args });
 
-    this.proc = spawn(this.piPath, args, {
+    this.proc = spawn(this.config.piPath, args, {
       stdio: ['pipe', 'pipe', 'pipe'],
       env: { ...process.env },
     });
@@ -222,7 +238,7 @@ export class AgentManager {
         signal !== 'SIGTERM' &&
         signal !== 'SIGKILL'
       ) {
-        this.crashInfo = `agent process exited unexpectedly (code ${code})`;
+        this._crashInfo = `agent process exited unexpectedly (code ${code})`;
       }
     });
   }
@@ -271,6 +287,7 @@ export class AgentManager {
         break;
 
       case 'message_end': {
+        // Stash per-message usage as fallback — agent_end may lack messages[]
         const msg = obj.message as Msg | undefined;
         if (msg?.role === 'assistant' && msg.usage) {
           const u = msg.usage as Msg;
@@ -374,7 +391,10 @@ export class AgentManager {
     }
   }
 
-  /** Aggregate usage from agent_end messages array. */
+  /**
+   * Aggregate usage from agent_end.messages[]. Falls back to lastUsage
+   * (stashed from message_end) if messages array is absent or empty.
+   */
   private aggregateUsage(agentEnd: Msg): AgentUsage | undefined {
     const messages = agentEnd.messages;
     if (!Array.isArray(messages)) {
@@ -422,7 +442,7 @@ export class AgentManager {
   }
 
   private emitEvent(event: AgentEvent): void {
-    this.cb?.(event);
+    this._onEvent?.(event);
   }
 
   /** Submit a prompt to the agent. */
@@ -457,8 +477,9 @@ export class AgentManager {
   /** Send an RPC command and wait for the matching response. */
   async rpcWait(
     command: Record<string, unknown>,
-    timeoutMs = 30000,
+    timeoutMs?: number,
   ): Promise<RpcResponse> {
+    const timeout = timeoutMs ?? this.config.rpcTimeout;
     this.ensureRunning();
     if (!this.proc?.stdin?.writable) {
       return {
@@ -473,7 +494,7 @@ export class AgentManager {
         if (this.pendingRpc.delete(id)) {
           resolve({ type: 'response', success: false, error: 'RPC timeout' });
         }
-      }, timeoutMs);
+      }, timeout);
       this.pendingRpc.set(id, { resolve, timer });
       this.proc!.stdin!.write(`${JSON.stringify({ ...command, id })}\n`);
     });
@@ -495,14 +516,14 @@ export class AgentManager {
     if (this.proc && !this.proc.killed) {
       const p = this.proc;
       p.kill('SIGTERM');
-      // Escalate to SIGKILL if process doesn't exit within 2s
+      // Escalate to SIGKILL if process doesn't exit in time
       const forceKill = setTimeout(() => {
         try {
           p.kill('SIGKILL');
         } catch {
           /* already exited */
         }
-      }, 2000);
+      }, this.config.killTimeout);
       forceKill.unref(); // Don't prevent Node from exiting
       this.proc = null;
     }
@@ -510,9 +531,27 @@ export class AgentManager {
     this._submitted = false;
   }
 
+  get sessionFile(): string | undefined {
+    return this._sessionFile;
+  }
+
+  set sessionFile(path: string | undefined) {
+    this._sessionFile = path;
+  }
+
+  /**
+   * Consume crash info — returns the stored message and clears it.
+   * Designed for one-time display on next enterAgentMode.
+   */
+  consumeCrashInfo(): string | undefined {
+    const info = this._crashInfo;
+    this._crashInfo = undefined;
+    return info;
+  }
+
   /** Kill process + clear session (full reset via Ctrl+L). */
   reset(): void {
     this.kill();
-    this.sessionFile = undefined;
+    this._sessionFile = undefined;
   }
 }

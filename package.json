@@ -1,6 +1,6 @@
 {
-  "name": "pish",
-  "version": "0.8.0",
+  "name": "@aerode/pish",
+  "version": "0.9.0",
   "description": "A shell-first pi coding agent",
   "license": "MIT",
   "author": "dacapoday",

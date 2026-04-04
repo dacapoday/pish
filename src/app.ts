@@ -7,7 +7,6 @@
  */
 
 import * as fs from 'node:fs';
-import * as os from 'node:os';
 import * as path from 'node:path';
 import type { IPty } from 'node-pty';
 import type { AgentEvent, AgentManager, RpcResponse } from './agent.js';
@@ -23,6 +22,7 @@ import {
   StreamRenderer,
   startSpinner,
 } from './render.js';
+import { findLatestSession } from './session.js';
 
 // ═══════════════════════════════════════
 // Pure helpers (module-level, no `this`)
@@ -45,60 +45,6 @@ function formatContext(entries: ContextEntry[]): string {
     .join('\n\n');
 }
 
-/** pi agent directory, respects PI_CODING_AGENT_DIR env var. */
-function getAgentDir(): string {
-  const envDir = process.env.PI_CODING_AGENT_DIR;
-  if (envDir) {
-    if (envDir === '~') return os.homedir();
-    if (envDir.startsWith('~/')) return os.homedir() + envDir.slice(1);
-    return envDir;
-  }
-  return path.join(os.homedir(), '.pi', 'agent');
-}
-
-/** CWD encoding rule, matching pi's getDefaultSessionDir. */
-function cwdToSessionSubdir(cwd: string): string {
-  return `--${cwd.replace(/^[\/\\]/, '').replace(/[\/\\:]/g, '-')}--`;
-}
-
-/**
- * Find the latest session file in the CWD session directory with mtime > since.
- */
-async function findLatestSession(
-  since: number,
-  debug: (...a: unknown[]) => void,
-): Promise<string | null> {
-  const cwdSessionDir = path.join(
-    getAgentDir(),
-    'sessions',
-    cwdToSessionSubdir(process.cwd()),
-  );
-
-  let files: string[];
-  try {
-    files = await fs.promises.readdir(cwdSessionDir);
-  } catch {
-    return null; // directory doesn't exist
-  }
-
-  let latest: { path: string; mtime: number } | null = null;
-
-  for (const file of files) {
-    if (!file.endsWith('.jsonl')) continue;
-    try {
-      const filePath = path.join(cwdSessionDir, file);
-      const fstat = await fs.promises.stat(filePath);
-      const mtime = fstat.mtimeMs;
-      if (mtime > since && (!latest || mtime > latest.mtime)) {
-        latest = { path: filePath, mtime };
-      }
-    } catch {
-      debug('findLatestSession: stat error for', file);
-    }
-  }
-
-  return latest?.path ?? null;
-}
 
 // ═══════════════════════════════════════
 // App
@@ -146,8 +92,9 @@ export class App {
     this.tmpDir = infra.tmpDir;
     this.rcPath = infra.rcPath;
     // Open debug log file (same file shell hooks append to)
-    const debugPath = process.env.PISH_DEBUG;
-    this.debugFd = debugPath ? fs.openSync(debugPath, 'a') : null;
+    this.debugFd = deps.cfg.debugPath
+      ? fs.openSync(deps.cfg.debugPath, 'a')
+      : null;
 
     // Wire internal event handlers
     this.agent.onEvent((event) => this.onAgentEvent(event));
@@ -168,7 +115,7 @@ export class App {
   onPtyExit(code: number): void {
     this.debugLog('PTY exited, code:', code);
     printExit();
-    log('exit', { context_count: this.recorder.context.length, code });
+    log('exit', { context_count: this.recorder.contextCount, code });
     closeLog();
     this.cleanup();
     process.exit(code);
@@ -202,6 +149,7 @@ export class App {
   /** Terminal resized. */
   onResize(cols: number, rows: number): void {
     this.pty.resize(cols, rows);
+    this.recorder.updateSize(cols, rows);
   }
 
   /** Cleanup all resources. Public — called by signal handlers in main.ts. */
@@ -275,7 +223,11 @@ export class App {
         this.fifoFd = fs.openSync(this.fifoPath, 'w');
         this.debugLog('FIFO write fd opened');
         log('shell_ready', { pid: this.pty.pid });
-        printBanner(this.cfg);
+        if (!this.cfg.noBanner) {
+          printBanner(this.cfg.version, this.cfg.shell, {
+            noAgent: this.cfg.noAgent,
+          });
+        }
         break;
 
       case 'context':
@@ -283,7 +235,7 @@ export class App {
           prompt: evt.entry.prompt,
           output: evt.entry.output,
           rc: evt.entry.rc,
-          kept: this.recorder.context.length,
+          kept: this.recorder.contextCount,
         });
         break;
 
@@ -328,11 +280,14 @@ export class App {
     const entries = this.recorder.drain();
     log('agent', { cmd, context_count: entries.length });
 
-    this.renderer = new StreamRenderer(this.cfg.toolResultLines);
+    this.renderer = new StreamRenderer(
+      this.cfg.toolResultLines,
+      this.cfg.spinnerInterval,
+    );
 
-    if (this.agent.crashInfo) {
-      printNotice(this.agent.crashInfo);
-      this.agent.crashInfo = undefined;
+    const crashInfo = this.agent.consumeCrashInfo();
+    if (crashInfo) {
+      printNotice(crashInfo);
     }
 
     this.renderer.showSpinner();
@@ -361,7 +316,7 @@ export class App {
     // Only if agent process is alive — don't respawn after crash.
     if (this.agent.alive) {
       this.agent
-        .rpcWait({ type: 'get_state' }, 5000)
+        .rpcWait({ type: 'get_state' })
         .then((response) => {
           if (response.success && response.data?.sessionFile) {
             this.agent.sessionFile = response.data.sessionFile as string;
@@ -380,7 +335,7 @@ export class App {
           this.pty.write(chunk.toString());
         }
         this.debugLog('replayed', buffered.length, 'stdin chunks');
-      }, 50);
+      }, this.cfg.stdinReplayDelay);
     }
   }
 
@@ -442,11 +397,14 @@ export class App {
 
     switch (name) {
       case '/compact': {
-        const stopSpinner = startSpinner('Compacting...');
+        const stopSpinner = startSpinner(
+          'Compacting...',
+          this.cfg.spinnerInterval,
+        );
         try {
           return await this.agent.rpcWait(
             { type: 'compact', ...(arg ? { customInstructions: arg } : {}) },
-            60000,
+            this.cfg.compactTimeout,
           );
         } finally {
           stopSpinner();
@@ -454,7 +412,7 @@ export class App {
       }
       case '/model': {
         if (!arg) {
-          const state = await this.agent.rpcWait({ type: 'get_state' }, 5000);
+          const state = await this.agent.rpcWait({ type: 'get_state' });
           if (state.success && state.data?.model) {
             const m = state.data.model as Record<string, unknown>;
             const prov = m.provider as
@@ -482,27 +440,22 @@ export class App {
         }
         const slashIdx = arg.indexOf('/');
         if (slashIdx > 0) {
-          return await this.agent.rpcWait(
-            {
-              type: 'set_model',
-              provider: arg.slice(0, slashIdx),
-              modelId: arg.slice(slashIdx + 1),
-            },
-            10000,
-          );
+          return await this.agent.rpcWait({
+            type: 'set_model',
+            provider: arg.slice(0, slashIdx),
+            modelId: arg.slice(slashIdx + 1),
+          });
         } else {
-          return await this.agent.rpcWait(
-            { type: 'set_model', provider: '', modelId: arg },
-            10000,
-          );
+          return await this.agent.rpcWait({
+            type: 'set_model',
+            provider: '',
+            modelId: arg,
+          });
         }
       }
       case '/think': {
         const level = arg || 'medium';
-        return await this.agent.rpcWait(
-          { type: 'set_thinking_level', level },
-          5000,
-        );
+        return await this.agent.rpcWait({ type: 'set_thinking_level', level });
       }
       default:
         return null;
@@ -520,7 +473,7 @@ export class App {
     this.reverseStartTime = Date.now();
     this.preReverseSessionFile = sessionFile;
     log('reverse', {
-      context_count: this.recorder.context.length,
+      context_count: this.recorder.contextCount,
       session: sessionFile || null,
     });
     if (sessionFile) {

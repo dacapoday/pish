@@ -9,7 +9,18 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, it } from 'node:test';
-import { type AgentEvent, AgentManager } from '../../src/agent.js';
+import {
+  type AgentConfig,
+  type AgentEvent,
+  AgentManager,
+} from '../../src/agent.js';
+
+/** Default test config for AgentManager. */
+const TEST_AGENT_CFG: AgentConfig = {
+  piPath: '/nonexistent',
+  rpcTimeout: 30_000,
+  killTimeout: 2_000,
+};
 
 // ── Helpers ──
 
@@ -60,21 +71,21 @@ afterEach(() => {
 
 describe('AgentManager', () => {
   it('starts not running and not alive', () => {
-    const agent = new AgentManager('/nonexistent');
+    const agent = new AgentManager(TEST_AGENT_CFG);
     agents.push(agent);
     assert.equal(agent.running, false);
     assert.equal(agent.alive, false);
   });
 
   it('sessionFile defaults to undefined', () => {
-    const agent = new AgentManager('/nonexistent');
+    const agent = new AgentManager(TEST_AGENT_CFG);
     agents.push(agent);
     assert.equal(agent.sessionFile, undefined);
   });
 
   it('emits agent_error when process crashes immediately', async () => {
     const bin = fakePi('exit 42');
-    const agent = new AgentManager(bin);
+    const agent = new AgentManager({ ...TEST_AGENT_CFG, piPath: bin });
     agents.push(agent);
 
     const eventsP = waitForEvent(agent, (e) => e.type === 'agent_error');
@@ -91,15 +102,16 @@ describe('AgentManager', () => {
 
   it('stores crashInfo on non-zero exit', async () => {
     const bin = fakePi('exit 42');
-    const agent = new AgentManager(bin);
+    const agent = new AgentManager({ ...TEST_AGENT_CFG, piPath: bin });
     agents.push(agent);
 
     const eventsP = waitForEvent(agent, (e) => e.type === 'agent_error');
     agent.submit('hello');
     await eventsP;
 
-    assert.ok(agent.crashInfo);
-    assert.ok(agent.crashInfo!.includes('42'));
+    const info = agent.consumeCrashInfo();
+    assert.ok(info);
+    assert.ok(info!.includes('42'));
   });
 
   it('emits agent_done for a complete agent run', async () => {
@@ -111,7 +123,7 @@ describe('AgentManager', () => {
       # Keep alive briefly
       sleep 60
     `);
-    const agent = new AgentManager(bin);
+    const agent = new AgentManager({ ...TEST_AGENT_CFG, piPath: bin });
     agents.push(agent);
 
     const eventsP = waitForEvent(agent, (e) => e.type === 'agent_done');
@@ -132,7 +144,7 @@ describe('AgentManager', () => {
       echo '{"type":"agent_end","messages":[]}'
       sleep 60
     `);
-    const agent = new AgentManager(bin);
+    const agent = new AgentManager({ ...TEST_AGENT_CFG, piPath: bin });
     agents.push(agent);
 
     const eventsP = waitForEvent(agent, (e) => e.type === 'agent_done');
@@ -154,7 +166,7 @@ describe('AgentManager', () => {
       echo '{"type":"agent_end","messages":[]}'
       sleep 60
     `);
-    const agent = new AgentManager(bin);
+    const agent = new AgentManager({ ...TEST_AGENT_CFG, piPath: bin });
     agents.push(agent);
 
     const eventsP = waitForEvent(agent, (e) => e.type === 'agent_done');
@@ -176,7 +188,7 @@ describe('AgentManager', () => {
       echo '{"type":"agent_end","messages":[]}'
       sleep 60
     `);
-    const agent = new AgentManager(bin);
+    const agent = new AgentManager({ ...TEST_AGENT_CFG, piPath: bin });
     agents.push(agent);
 
     const eventsP = waitForEvent(agent, (e) => e.type === 'agent_done');
@@ -198,7 +210,7 @@ describe('AgentManager', () => {
 
   it('kill() stops the process', async () => {
     const bin = fakePi('sleep 60');
-    const agent = new AgentManager(bin);
+    const agent = new AgentManager({ ...TEST_AGENT_CFG, piPath: bin });
     agents.push(agent);
 
     agent.submit('hello');
@@ -212,7 +224,7 @@ describe('AgentManager', () => {
   });
 
   it('reset() clears sessionFile', () => {
-    const agent = new AgentManager('/nonexistent');
+    const agent = new AgentManager(TEST_AGENT_CFG);
     agents.push(agent);
     agent.sessionFile = '/tmp/session.jsonl';
     agent.reset();
@@ -220,7 +232,7 @@ describe('AgentManager', () => {
   });
 
   it('kill() preserves sessionFile', () => {
-    const agent = new AgentManager('/nonexistent');
+    const agent = new AgentManager(TEST_AGENT_CFG);
     agents.push(agent);
     agent.sessionFile = '/tmp/session.jsonl';
     agent.kill();
@@ -248,7 +260,7 @@ describe('AgentManager', () => {
         });
       '
     `);
-    const agent = new AgentManager(bin);
+    const agent = new AgentManager({ ...TEST_AGENT_CFG, piPath: bin });
     agents.push(agent);
 
     const resp = await agent.rpcWait({ type: 'get_state' }, 3000);
@@ -258,17 +270,21 @@ describe('AgentManager', () => {
 
   it('rpcWait times out', async () => {
     const bin = fakePi('sleep 60');
-    const agent = new AgentManager(bin);
+    const agent = new AgentManager({
+      ...TEST_AGENT_CFG,
+      piPath: bin,
+      rpcTimeout: 500,
+    });
     agents.push(agent);
 
-    const resp = await agent.rpcWait({ type: 'get_state' }, 500);
+    const resp = await agent.rpcWait({ type: 'get_state' });
     assert.equal(resp.success, false);
     assert.ok(resp.error?.includes('timeout'));
   });
 
   it('rpcWait resolves with error when process dies', async () => {
     const bin = fakePi('read -r line; exit 1');
-    const agent = new AgentManager(bin);
+    const agent = new AgentManager({ ...TEST_AGENT_CFG, piPath: bin });
     agents.push(agent);
 
     const resp = await agent.rpcWait({ type: 'get_state' }, 3000);

@@ -1,8 +1,8 @@
 /**
  * Structured JSON event log.
  *
- * Controlled by PISH_LOG env var:
- *   unset          → no output
+ * Target values (from Config.logTarget):
+ *   null           → no output
  *   "1" | "stderr" → stderr
  *   file path      → append to file
  */
@@ -18,8 +18,7 @@ export interface LogEvent {
 let logFd: number | null = null;
 let logToStderr = false;
 
-export function initLog(): void {
-  const target = process.env.PISH_LOG;
+export function initLog(target: string | null): void {
   if (!target) return;
 
   if (target === '1' || target === 'stderr') {
