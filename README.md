@@ -32,7 +32,7 @@ Agent output goes to **stderr**, never contaminating your shell's stdout. Your p
 ### Install from npm
 
 ```bash
-npm install -g pish
+npm install -g @aerode/pish
 ```
 
 ### Install from source
