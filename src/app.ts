@@ -50,6 +50,14 @@ function formatContext(entries: ContextEntry[]): string {
 // App
 // ═══════════════════════════════════════
 
+/** Agent mode state — created on enter, destroyed on exit/abort. */
+interface AgentSession {
+  readonly cmd: string;
+  readonly startTime: number;
+  readonly stdinBuffer: Buffer[];
+  readonly renderer: StreamRenderer;
+}
+
 export class App {
   // ── Injected dependencies ──
   private readonly cfg: Config;
@@ -67,12 +75,8 @@ export class App {
   private fifoFd: number | null = null;
   private cleaned = false;
 
-  // ── Agent mode state ──
-  private mode: 'normal' | 'agent' = 'normal';
-  private agentCmd = '';
-  private agentStartTime = 0;
-  private stdinBuffer: Buffer[] = [];
-  private renderer: StreamRenderer | null = null;
+  // ── Agent mode (null = normal) ──
+  private agentSession: AgentSession | null = null;
 
   // ── Reverse session recovery ──
   private sessionEpoch = Date.now();
@@ -123,11 +127,11 @@ export class App {
 
   /** Terminal stdin data → mode routing. */
   onStdin(data: Buffer): void {
-    if (this.mode === 'agent') {
+    if (this.agentSession) {
       if (data.length === 1 && data[0] === 0x03) {
         this.abortAgent();
       } else {
-        this.stdinBuffer.push(Buffer.from(data));
+        this.agentSession.stdinBuffer.push(Buffer.from(data));
       }
       return;
     }
@@ -196,18 +200,18 @@ export class App {
   // ═══════════════════════════════════════
 
   private onAgentEvent(event: AgentEvent): void {
-    this.renderer?.handleEvent(event);
+    this.agentSession?.renderer.handleEvent(event);
 
-    if (event.type === 'agent_done' && this.mode === 'agent') {
+    if (event.type === 'agent_done' && this.agentSession) {
       log('agent_done', {
-        cmd: this.agentCmd,
-        duration_ms: Date.now() - this.agentStartTime,
+        cmd: this.agentSession.cmd,
+        duration_ms: Date.now() - this.agentSession.startTime,
       });
       this.exitAgentMode();
     }
 
-    if (event.type === 'agent_error' && this.mode === 'agent') {
-      log('agent_error', { cmd: this.agentCmd, error: event.error });
+    if (event.type === 'agent_error' && this.agentSession) {
+      log('agent_error', { cmd: this.agentSession.cmd, error: event.error });
       this.exitAgentMode();
     }
   }
@@ -271,26 +275,23 @@ export class App {
   // ═══════════════════════════════════════
 
   private enterAgentMode(cmd: string): void {
-    this.mode = 'agent';
-    this.agentCmd = cmd;
-    this.agentStartTime = Date.now();
-    this.stdinBuffer = [];
     this.debugLog('enterAgentMode:', cmd);
 
     const entries = this.recorder.drain();
     log('agent', { cmd, context_count: entries.length });
 
-    this.renderer = new StreamRenderer(
+    const renderer = new StreamRenderer(
       this.cfg.toolResultLines,
       this.cfg.spinnerInterval,
     );
+    this.agentSession = { cmd, startTime: Date.now(), stdinBuffer: [], renderer };
 
     const crashInfo = this.agent.consumeCrashInfo();
     if (crashInfo) {
       printNotice(crashInfo);
     }
 
-    this.renderer.showSpinner();
+    renderer.showSpinner();
 
     let message = cmd;
     const ctx = formatContext(entries);
@@ -302,13 +303,9 @@ export class App {
   }
 
   private exitAgentMode(): void {
-    this.debugLog(
-      'exitAgentMode, stdinBuffer:',
-      this.stdinBuffer.length,
-      'chunks',
-    );
-    this.mode = 'normal';
-    this.renderer = null;
+    const session = this.agentSession!;
+    this.debugLog('exitAgentMode, stdinBuffer:', session.stdinBuffer.length, 'chunks');
+    this.agentSession = null;
 
     this.fifoWrite('PROCEED');
 
@@ -327,29 +324,26 @@ export class App {
         });
     }
 
-    const buffered = this.stdinBuffer;
-    this.stdinBuffer = [];
-    if (buffered.length > 0) {
+    if (session.stdinBuffer.length > 0) {
       setTimeout(() => {
-        for (const chunk of buffered) {
+        for (const chunk of session.stdinBuffer) {
           this.pty.write(chunk.toString());
         }
-        this.debugLog('replayed', buffered.length, 'stdin chunks');
+        this.debugLog('replayed', session.stdinBuffer.length, 'stdin chunks');
       }, this.cfg.stdinReplayDelay);
     }
   }
 
   private abortAgent(): void {
     this.debugLog('abortAgent');
+    const session = this.agentSession!;
     this.agent.abort();
-    this.renderer?.printInterrupted();
+    session.renderer.printInterrupted();
     log('agent_abort', {
-      cmd: this.agentCmd,
-      duration_ms: Date.now() - this.agentStartTime,
+      cmd: session.cmd,
+      duration_ms: Date.now() - session.startTime,
     });
-    this.mode = 'normal';
-    this.renderer = null;
-    this.stdinBuffer = [];
+    this.agentSession = null;
     this.fifoWrite('PROCEED');
   }
 
@@ -412,6 +406,8 @@ export class App {
       }
       case '/model': {
         if (!arg) {
+          // Query current model via get_state, then wrap as set_model response
+          // to reuse printControlResult's existing set_model rendering.
           const state = await this.agent.rpcWait({ type: 'get_state' });
           if (state.success && state.data?.model) {
             const m = state.data.model as Record<string, unknown>;

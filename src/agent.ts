@@ -84,7 +84,7 @@ export interface RpcResponse {
   error?: string;
 }
 
-export type AgentCallback = (event: AgentEvent) => void;
+type AgentCallback = (event: AgentEvent) => void;
 
 // ── JSON message helpers (pi RPC is untyped JSON) ──
 
@@ -465,13 +465,6 @@ export class AgentManager {
     if (!this.proc?.stdin?.writable) return;
     const cmd = `${JSON.stringify({ type: 'abort' })}\n`;
     this.proc.stdin.write(cmd);
-  }
-
-  /** Send an RPC command (fire-and-forget). */
-  rpc(command: Record<string, unknown>): void {
-    this.ensureRunning();
-    if (!this.proc?.stdin?.writable) return;
-    this.proc.stdin.write(`${JSON.stringify(command)}\n`);
   }
 
   /** Send an RPC command and wait for the matching response. */

@@ -46,21 +46,8 @@ const rcPath = generateRcfile({ shell: cfg.shell, fifoPath, tmpDir });
 
 // ── Objects ──
 
-const recorder = new Recorder({
-  maxContext: cfg.maxContext,
-  headLines: cfg.headLines,
-  tailLines: cfg.tailLines,
-  lineWidth: cfg.lineWidth,
-  compactBufferThreshold: cfg.compactBufferThreshold,
-  defaultCols: cfg.defaultCols,
-  defaultRows: cfg.defaultRows,
-});
-
-const agent = new AgentManager({
-  piPath: cfg.piPath,
-  rpcTimeout: cfg.rpcTimeout,
-  killTimeout: cfg.killTimeout,
-});
+const recorder = new Recorder(cfg);
+const agent = new AgentManager(cfg);
 
 // ── PTY ──
 
