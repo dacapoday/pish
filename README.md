@@ -123,6 +123,7 @@ Options:
 | `PISH_DEBUG` | Debug log file path | off |
 | `PISH_NO_BANNER` | Hide startup banner (set to `1`) | off |
 
+
 ## Known limitations
 
 - **Bash keywords** — `do something` or `if something` triggers a syntax error instead of the AI agent. Rephrase as `please do something`.
