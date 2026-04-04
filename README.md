@@ -4,14 +4,9 @@
 
 pish wraps bash or zsh transparently. Every command you know works exactly as before — zero overhead. When you type something the shell doesn't recognize, an AI agent ([pi](https://github.com/badlogic/pi-mono)) kicks in automatically.
 
-```
-❯ ls -la                          # normal shell, as always
-❯ fix the type error in main.ts   # AI agent activates
-⠋ Working...
-  edit src/main.ts
-✓ done (3.2s)
-❯ pi                              # full pi TUI, with session continuity
-```
+<p align="center">
+  <img src="pish-example.gif" alt="pish demo" width="600">
+</p>
 
 ## How it works
 
