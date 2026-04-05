@@ -209,7 +209,8 @@ describe('AgentManager', () => {
   });
 
   it('kill() stops the process', async () => {
-    const bin = fakePi('trap "exit 0" TERM; read -r _ || true');
+    // read consumes the submit line, then second read blocks forever; trap ensures clean exit on SIGTERM
+    const bin = fakePi('trap "exit 0" TERM; read -r _; read -r _');
     const agent = new AgentManager({ ...TEST_AGENT_CFG, piPath: bin });
     agents.push(agent);
 
