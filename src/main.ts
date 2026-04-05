@@ -89,7 +89,7 @@ ptyProcess.onExit(({ exitCode }) => app.onPtyExit(exitCode ?? 0));
 
 process.stdin.setRawMode?.(true);
 process.stdin.resume();
-process.stdin.on('data', (data) => app.onStdin(data));
+process.stdin.on('data', (data) => app.onStdin(Buffer.from(data)));
 
 process.stdout.on('resize', () => {
   app.onResize(
