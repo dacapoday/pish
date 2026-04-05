@@ -90,7 +90,7 @@ jobs:
       - name: Verify package contents
         run: npm pack --dry-run
       - name: Upload build artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: dist
           path: dist/
