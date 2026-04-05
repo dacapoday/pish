@@ -32,6 +32,14 @@ function fakePi(script: string): string {
   return bin;
 }
 
+/** Create a fake pi using node (single process, no orphan risk). */
+function fakePiNode(script: string): string {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pish-test-'));
+  const bin = path.join(dir, 'pi');
+  fs.writeFileSync(bin, `#!/usr/bin/env node\n${script}`, { mode: 0o755 });
+  return bin;
+}
+
 /** Collect events until a predicate is met or timeout. */
 function waitForEvent(
   agent: AgentManager,
@@ -209,8 +217,11 @@ describe('AgentManager', () => {
   });
 
   it('kill() stops the process', async () => {
-    // read consumes the submit line, then second read blocks forever; trap ensures clean exit on SIGTERM
-    const bin = fakePi('trap "exit 0" TERM; read -r _; read -r _');
+    // Node single-process: read one line (the submit), then block forever
+    const bin = fakePiNode(`
+      const rl = require('readline').createInterface({ input: process.stdin });
+      rl.once('line', () => { /* consumed submit, now block */ });
+    `);
     const agent = new AgentManager({ ...TEST_AGENT_CFG, piPath: bin });
     agents.push(agent);
 
@@ -270,8 +281,9 @@ describe('AgentManager', () => {
   });
 
   it('rpcWait times out', async () => {
-    // Ignore SIGTERM so process stays alive past rpcTimeout; afterEach kill() escalates to SIGKILL
-    const bin = fakePi('trap "" TERM; while true; do sleep 0.1; done');
+    // Node single-process: ignore SIGTERM so process stays alive past rpcTimeout;
+    // afterEach kill() escalates to SIGKILL which terminates the single node process.
+    const bin = fakePiNode('process.on("SIGTERM", () => {}); setInterval(() => {}, 60000);');
     const agent = new AgentManager({
       ...TEST_AGENT_CFG,
       piPath: bin,
