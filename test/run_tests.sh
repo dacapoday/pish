@@ -172,17 +172,19 @@ npm run build --silent 2>&1
 if [[ -z "$FILTER_NAME" && -z "$FILTER_SHELL" && "$FILTER_TIER" != "slow" ]]; then
   echo ""
   echo "── unit tests ──"
-  unit_output=$(npx tsx --test test/unit/*.test.ts 2>&1)
-  unit_pass=$(echo "$unit_output" | grep '^ℹ pass' | awk '{print $3}')
-  unit_fail=$(echo "$unit_output" | grep '^ℹ fail' | awk '{print $3}')
+  unit_tmp=$(mktemp)
+  npx tsx --test test/unit/*.test.ts >"$unit_tmp" 2>&1 || true
+  unit_pass=$(grep '^ℹ pass' "$unit_tmp" | awk '{print $3}')
+  unit_fail=$(grep '^ℹ fail' "$unit_tmp" | awk '{print $3}')
   if [[ "$unit_fail" == "0" ]]; then
     echo "  ${unit_pass} tests ... PASS"
     TOTAL_PASS=$((TOTAL_PASS + 1))
   else
     echo "  unit tests ... FAIL"
-    echo "$unit_output" | sed 's/^/    /'
+    sed 's/^/    /' "$unit_tmp"
     TOTAL_FAIL=$((TOTAL_FAIL + 1))
   fi
+  rm -f "$unit_tmp"
 fi
 
 # ═══════════════════════════════════════
