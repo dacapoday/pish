@@ -61,13 +61,20 @@ run_test_once() {
   local shell="$1"
   local expect_file="$2"
   local checks_str="$3"  # §-delimited assertions
+  local tier="$4"        # fast|slow
 
   local logfile="$LOGDIR/${shell}_$$.jsonl"
   rm -f "$logfile"
 
+  # For fast tier, provide a dummy pi so pish can start without real pi
+  local pi_env=()
+  if [[ "$tier" == "fast" && -n "$FAKE_PI" ]]; then
+    pi_env=(PISH_PI="$FAKE_PI")
+  fi
+
   # Run expect
   local expect_err="$LOGDIR/expect_err_$$"
-  if ! PISH_LOG="$logfile" PISH_SHELL="$shell" PISH_NORC=1 expect "$expect_file" >"$expect_err" 2>&1; then
+  if ! env "${pi_env[@]}" PISH_LOG="$logfile" PISH_SHELL="$shell" PISH_NORC=1 expect "$expect_file" >"$expect_err" 2>&1; then
     echo "" >&2
     echo "    [expect failed]" >&2
     sed 's/^/    /' "$expect_err" >&2
@@ -106,7 +113,7 @@ run_test() {
 
   echo -n "  $name ... "
 
-  if run_test_once "$shell" "$expect_file" "$checks_str"; then
+  if run_test_once "$shell" "$expect_file" "$checks_str" "$tier"; then
     echo "PASS"
     TOTAL_PASS=$((TOTAL_PASS + 1))
     return
@@ -115,7 +122,7 @@ run_test() {
   # Auto-retry slow tests once (flaky due to LLM/network)
   if [[ "$tier" == "slow" ]]; then
     echo -n "RETRY ... "
-    if run_test_once "$shell" "$expect_file" "$checks_str"; then
+    if run_test_once "$shell" "$expect_file" "$checks_str" "$tier"; then
       echo "PASS"
       TOTAL_PASS=$((TOTAL_PASS + 1))
       return
@@ -170,6 +177,13 @@ EDGE_SHELL="${SHELLS[0]:-bash}"
 
 echo "Building..."
 npm run build --silent 2>&1
+
+# Create a dummy pi for fast tests (pish requires pi to exist at startup).
+# Slow tests use the real pi binary; edge tests manage their own pi.
+FAKE_PI_DIR=$(mktemp -d)
+printf '#!/bin/sh\nsleep 60\n' > "$FAKE_PI_DIR/pi"
+chmod +x "$FAKE_PI_DIR/pi"
+FAKE_PI="$FAKE_PI_DIR/pi"
 
 # ═══════════════════════════════════════
 # Unit tests (always run unless filtering by name/shell)
@@ -246,7 +260,7 @@ if $run_edge; then
       first=false
     fi
 
-    run_test "$EDGE_SHELL" "$name" "$tier" "$expect_file" "$checks"
+    run_test "$EDGE_SHELL" "$name" "edge" "$expect_file" "$checks"
   done
 fi
 
@@ -256,6 +270,6 @@ fi
 
 echo ""
 echo "Results: $TOTAL_PASS passed, $TOTAL_FAIL failed"
-rm -rf "$LOGDIR"
+rm -rf "$LOGDIR" "$FAKE_PI_DIR"
 
 [[ $TOTAL_FAIL -eq 0 ]] && exit 0 || exit 1
