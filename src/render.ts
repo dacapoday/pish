@@ -89,10 +89,7 @@ export function printNotice(msg: string): void {
 
 const SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
 
-export function startSpinner(
-  label: string,
-  intervalMs: number,
-): () => void {
+export function startSpinner(label: string, intervalMs: number): () => void {
   let frame = 0;
   let stopped = false;
 

@@ -26,18 +26,18 @@ export const DEFAULTS = {
   toolResultLines: 10,
 
   // Timeouts (ms)
-  rpcTimeout: 30_000,           // default RPC response timeout
-  compactTimeout: 60_000,       // /compact needs LLM generation — much longer
-  killTimeout: 2_000,           // SIGTERM → SIGKILL escalation wait
-  stdinReplayDelay: 50,         // wait for shell readline ready after agent exit
+  rpcTimeout: 30_000, // default RPC response timeout
+  compactTimeout: 60_000, // /compact needs LLM generation — much longer
+  killTimeout: 2_000, // SIGTERM → SIGKILL escalation wait
+  stdinReplayDelay: 50, // wait for shell readline ready after agent exit
 
   // Terminal defaults (PTY spawn + vterm replay fallback)
   defaultCols: 120,
   defaultRows: 30,
 
   // Internal limits
-  compactBufferThreshold: 100_000,  // recorder fullBuffer trim threshold (bytes)
-  spinnerInterval: 80,              // spinner animation frame interval (ms)
+  compactBufferThreshold: 100_000, // recorder fullBuffer trim threshold (bytes)
+  spinnerInterval: 80, // spinner animation frame interval (ms)
 } as const;
 
 // ── Config type ──

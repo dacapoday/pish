@@ -45,7 +45,6 @@ function formatContext(entries: ContextEntry[]): string {
     .join('\n\n');
 }
 
-
 // ═══════════════════════════════════════
 // App
 // ═══════════════════════════════════════
@@ -284,7 +283,12 @@ export class App {
       this.cfg.toolResultLines,
       this.cfg.spinnerInterval,
     );
-    this.agentSession = { cmd, startTime: Date.now(), stdinBuffer: [], renderer };
+    this.agentSession = {
+      cmd,
+      startTime: Date.now(),
+      stdinBuffer: [],
+      renderer,
+    };
 
     const crashInfo = this.agent.consumeCrashInfo();
     if (crashInfo) {
@@ -304,7 +308,11 @@ export class App {
 
   private exitAgentMode(): void {
     const session = this.agentSession!;
-    this.debugLog('exitAgentMode, stdinBuffer:', session.stdinBuffer.length, 'chunks');
+    this.debugLog(
+      'exitAgentMode, stdinBuffer:',
+      session.stdinBuffer.length,
+      'chunks',
+    );
     this.agentSession = null;
 
     this.fifoWrite('PROCEED');
