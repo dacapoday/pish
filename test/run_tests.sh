@@ -66,9 +66,15 @@ run_test_once() {
   rm -f "$logfile"
 
   # Run expect
-  if ! PISH_LOG="$logfile" PISH_SHELL="$shell" PISH_NORC=1 expect "$expect_file" >/dev/null 2>&1; then
+  local expect_err="$LOGDIR/expect_err_$$"
+  if ! PISH_LOG="$logfile" PISH_SHELL="$shell" PISH_NORC=1 expect "$expect_file" >"$expect_err" 2>&1; then
+    echo "" >&2
+    echo "    [expect failed]" >&2
+    sed 's/^/    /' "$expect_err" >&2
+    rm -f "$expect_err"
     return 1
   fi
+  rm -f "$expect_err"
 
   # No assertions = expect-only
   if [[ -z "$checks_str" ]]; then
@@ -174,8 +180,9 @@ if [[ -z "$FILTER_NAME" && -z "$FILTER_SHELL" && "$FILTER_TIER" != "slow" ]]; th
   echo "── unit tests ──"
   unit_tmp=$(mktemp)
   npx tsx --test test/unit/*.test.ts >"$unit_tmp" 2>&1 || true
-  unit_pass=$(grep '^ℹ pass' "$unit_tmp" | awk '{print $3}') || true
-  unit_fail=$(grep '^ℹ fail' "$unit_tmp" | awk '{print $3}') || true
+  # Node test runner uses 'ℹ' prefix (Node 20+) or '# ' prefix (Node 18/22 on some CI)
+  unit_pass=$(grep -E '^(ℹ|#) pass' "$unit_tmp" | awk '{print $NF}') || true
+  unit_fail=$(grep -E '^(ℹ|#) fail' "$unit_tmp" | awk '{print $NF}') || true
   if [[ "$unit_fail" == "0" ]]; then
     echo "  ${unit_pass} tests ... PASS"
     TOTAL_PASS=$((TOTAL_PASS + 1))
