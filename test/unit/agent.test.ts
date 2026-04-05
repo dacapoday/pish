@@ -120,8 +120,8 @@ describe('AgentManager', () => {
       read -r line  # read prompt command
       echo '{"type":"agent_start"}'
       echo '{"type":"agent_end","messages":[]}'
-      # Keep alive briefly
-      sleep 60
+      # Keep alive until killed (read exits when stdin closes / SIGTERM)
+      trap 'exit 0' TERM; read -r _ || true
     `);
     const agent = new AgentManager({ ...TEST_AGENT_CFG, piPath: bin });
     agents.push(agent);
@@ -142,7 +142,7 @@ describe('AgentManager', () => {
       echo '{"type":"message_update","assistantMessageEvent":{"type":"thinking_delta","delta":"hmm"}}'
       echo '{"type":"message_update","assistantMessageEvent":{"type":"thinking_end","content":"hmm"}}'
       echo '{"type":"agent_end","messages":[]}'
-      sleep 60
+      trap 'exit 0' TERM; read -r _ || true
     `);
     const agent = new AgentManager({ ...TEST_AGENT_CFG, piPath: bin });
     agents.push(agent);
@@ -164,7 +164,7 @@ describe('AgentManager', () => {
       echo '{"type":"message_update","assistantMessageEvent":{"type":"text_delta","delta":"hi"}}'
       echo '{"type":"message_update","assistantMessageEvent":{"type":"text_end","content":"hi"}}'
       echo '{"type":"agent_end","messages":[]}'
-      sleep 60
+      trap 'exit 0' TERM; read -r _ || true
     `);
     const agent = new AgentManager({ ...TEST_AGENT_CFG, piPath: bin });
     agents.push(agent);
@@ -186,7 +186,7 @@ describe('AgentManager', () => {
       echo '{"type":"tool_execution_start","toolCallId":"t1","toolName":"bash","args":{"command":"ls"}}'
       echo '{"type":"tool_execution_end","toolCallId":"t1","toolName":"bash","result":{"text":"file.txt"},"isError":false}'
       echo '{"type":"agent_end","messages":[]}'
-      sleep 60
+      trap 'exit 0' TERM; read -r _ || true
     `);
     const agent = new AgentManager({ ...TEST_AGENT_CFG, piPath: bin });
     agents.push(agent);
@@ -209,7 +209,7 @@ describe('AgentManager', () => {
   });
 
   it('kill() stops the process', async () => {
-    const bin = fakePi('sleep 60');
+    const bin = fakePi('trap "exit 0" TERM; read -r _ || true');
     const agent = new AgentManager({ ...TEST_AGENT_CFG, piPath: bin });
     agents.push(agent);
 
@@ -269,7 +269,8 @@ describe('AgentManager', () => {
   });
 
   it('rpcWait times out', async () => {
-    const bin = fakePi('sleep 60');
+    // Ignore SIGTERM so process stays alive past rpcTimeout; afterEach kill() escalates to SIGKILL
+    const bin = fakePi('trap "" TERM; while true; do sleep 0.1; done');
     const agent = new AgentManager({
       ...TEST_AGENT_CFG,
       piPath: bin,
