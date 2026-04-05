@@ -174,8 +174,8 @@ if [[ -z "$FILTER_NAME" && -z "$FILTER_SHELL" && "$FILTER_TIER" != "slow" ]]; th
   echo "── unit tests ──"
   unit_tmp=$(mktemp)
   npx tsx --test test/unit/*.test.ts >"$unit_tmp" 2>&1 || true
-  unit_pass=$(grep '^ℹ pass' "$unit_tmp" | awk '{print $3}')
-  unit_fail=$(grep '^ℹ fail' "$unit_tmp" | awk '{print $3}')
+  unit_pass=$(grep '^ℹ pass' "$unit_tmp" | awk '{print $3}') || true
+  unit_fail=$(grep '^ℹ fail' "$unit_tmp" | awk '{print $3}') || true
   if [[ "$unit_fail" == "0" ]]; then
     echo "  ${unit_pass} tests ... PASS"
     TOTAL_PASS=$((TOTAL_PASS + 1))

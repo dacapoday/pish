@@ -283,7 +283,9 @@ describe('AgentManager', () => {
   it('rpcWait times out', async () => {
     // Node single-process: ignore SIGTERM so process stays alive past rpcTimeout;
     // afterEach kill() escalates to SIGKILL which terminates the single node process.
-    const bin = fakePiNode('process.on("SIGTERM", () => {}); setInterval(() => {}, 60000);');
+    const bin = fakePiNode(
+      'process.on("SIGTERM", () => {}); setInterval(() => {}, 60000);',
+    );
     const agent = new AgentManager({
       ...TEST_AGENT_CFG,
       piPath: bin,
