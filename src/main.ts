@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 
+process.title = 'pish';
+
 /**
  * pish — Pi-Integrated Shell.
  *
