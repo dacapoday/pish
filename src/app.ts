@@ -7,7 +7,6 @@
  */
 
 import * as fs from 'node:fs';
-import * as path from 'node:path';
 import type { IPty } from 'node-pty';
 import type { AgentEvent, AgentManager, RpcResponse } from './agent.js';
 import type { Config } from './config.js';
@@ -67,7 +66,6 @@ export class App {
   // ── Infrastructure (immutable after construction) ──
   private readonly fifoPath: string;
   private readonly tmpDir: string;
-  private readonly rcPath: string;
   private readonly debugFd: number | null;
 
   // ── FIFO ──
@@ -84,7 +82,7 @@ export class App {
 
   constructor(
     deps: { cfg: Config; pty: IPty; recorder: Recorder; agent: AgentManager },
-    infra: { fifoPath: string; tmpDir: string; rcPath: string },
+    infra: { fifoPath: string; tmpDir: string },
   ) {
     this.cfg = deps.cfg;
     this.pty = deps.pty;
@@ -93,7 +91,6 @@ export class App {
 
     this.fifoPath = infra.fifoPath;
     this.tmpDir = infra.tmpDir;
-    this.rcPath = infra.rcPath;
     // Open debug log file (same file shell hooks append to)
     this.debugFd = deps.cfg.debugPath
       ? fs.openSync(deps.cfg.debugPath, 'a')
@@ -169,21 +166,11 @@ export class App {
       }
       this.fifoFd = null;
     }
-    try {
-      fs.unlinkSync(this.fifoPath);
-    } catch {
-      /* already removed or never created */
-    }
+    // All temp files (fifo, rcfile, zdotdir/) live under tmpDir — one rm cleans everything.
     try {
       fs.rmSync(this.tmpDir, { recursive: true, force: true });
     } catch {
-      /* non-empty or already removed */
-    }
-    try {
-      fs.unlinkSync(this.rcPath);
-      fs.rmSync(path.dirname(this.rcPath), { recursive: true, force: true });
-    } catch {
-      /* zsh rcdir may not exist or already cleaned */
+      /* already removed */
     }
     if (this.debugFd !== null) {
       try {

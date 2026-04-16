@@ -83,7 +83,7 @@ log('start', { shell: cfg.shell, pid: ptyProcess.pid });
 
 const app = new App(
   { cfg, pty: ptyProcess, recorder, agent },
-  { fifoPath, tmpDir, rcPath },
+  { fifoPath, tmpDir },
 );
 
 ptyProcess.onData((data) => app.onPtyData(data));

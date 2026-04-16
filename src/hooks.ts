@@ -6,7 +6,6 @@
  */
 
 import * as fs from 'node:fs';
-import * as os from 'node:os';
 import * as path from 'node:path';
 
 export interface HooksConfig {
@@ -18,11 +17,17 @@ export interface HooksConfig {
 export function generateRcfile(config: HooksConfig): string {
   // zsh needs ZDOTDIR/.zshrc; bash uses --rcfile.
   // zsh ZDOTDIR must be a separate dir to avoid conflicts with user .zshrc.
-  const rcDir =
-    config.shell === 'zsh'
-      ? fs.mkdtempSync(path.join(os.tmpdir(), 'pish-rc-'))
-      : config.tmpDir;
-  const rcName = config.shell === 'zsh' ? '.zshrc' : 'rc.bash';
+  // We create a subdirectory under tmpDir instead of a separate mkdtemp.
+  let rcDir: string;
+  let rcName: string;
+  if (config.shell === 'zsh') {
+    rcDir = path.join(config.tmpDir, 'zdotdir');
+    fs.mkdirSync(rcDir);
+    rcName = '.zshrc';
+  } else {
+    rcDir = config.tmpDir;
+    rcName = 'rc.bash';
+  }
   const rcPath = path.join(rcDir, rcName);
 
   let content: string;
