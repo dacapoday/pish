@@ -128,6 +128,7 @@ describe('AgentManager', () => {
       read -r line  # read prompt command
       echo '{"type":"agent_start"}'
       echo '{"type":"agent_end","messages":[]}'
+      echo '{"type":"agent_settled"}'
       # Keep alive until killed (read exits when stdin closes / SIGTERM)
       trap 'exit 0' TERM; read -r _ || true
     `);
@@ -150,6 +151,7 @@ describe('AgentManager', () => {
       echo '{"type":"message_update","assistantMessageEvent":{"type":"thinking_delta","delta":"hmm"}}'
       echo '{"type":"message_update","assistantMessageEvent":{"type":"thinking_end","content":"hmm"}}'
       echo '{"type":"agent_end","messages":[]}'
+      echo '{"type":"agent_settled"}'
       trap 'exit 0' TERM; read -r _ || true
     `);
     const agent = new AgentManager({ ...TEST_AGENT_CFG, piPath: bin });
@@ -172,6 +174,7 @@ describe('AgentManager', () => {
       echo '{"type":"message_update","assistantMessageEvent":{"type":"text_delta","delta":"hi"}}'
       echo '{"type":"message_update","assistantMessageEvent":{"type":"text_end","content":"hi"}}'
       echo '{"type":"agent_end","messages":[]}'
+      echo '{"type":"agent_settled"}'
       trap 'exit 0' TERM; read -r _ || true
     `);
     const agent = new AgentManager({ ...TEST_AGENT_CFG, piPath: bin });
@@ -194,6 +197,7 @@ describe('AgentManager', () => {
       echo '{"type":"tool_execution_start","toolCallId":"t1","toolName":"bash","args":{"command":"ls"}}'
       echo '{"type":"tool_execution_end","toolCallId":"t1","toolName":"bash","result":{"text":"file.txt"},"isError":false}'
       echo '{"type":"agent_end","messages":[]}'
+      echo '{"type":"agent_settled"}'
       trap 'exit 0' TERM; read -r _ || true
     `);
     const agent = new AgentManager({ ...TEST_AGENT_CFG, piPath: bin });

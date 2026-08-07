@@ -32,7 +32,7 @@
 
 You already know your shell. You've built muscle memory for `cd`, `grep`, `git`, pipes, redirections, and a hundred aliases. **Why should talking to AI mean leaving all that behind?**
 
-pish doesn't replace your shell — it **is** your shell. Every command you know works exactly as before, with zero overhead. The moment you type something the shell doesn't recognize, an AI coding agent ([pi](https://github.com/badlogic/pi-mono)) seamlessly steps in — reading files, running commands, and editing code — all without breaking your flow.
+pish doesn't replace your shell — it **is** your shell. Every command you know works exactly as before, with zero overhead. The moment you type something the shell doesn't recognize, an AI coding agent ([pi](https://github.com/earendil-works/pi)) seamlessly steps in — reading files, running commands, and editing code — all without breaking your flow.
 
 > **Think of it as autocomplete for intent:** you describe what you want in plain English, and pish makes it happen, right where you are.
 
@@ -73,7 +73,7 @@ Switch models, adjust thinking levels, and compact context — all without leavi
 
 - **Node.js** ≥ 18
 - **bash** ≥ 4.4 or **zsh** ≥ 5.0
-- [**pi**](https://github.com/badlogic/pi-mono) installed and on PATH
+- [**pi**](https://github.com/earendil-works/pi) installed and on PATH
 
 ### Install from npm
 
@@ -125,7 +125,7 @@ The agent can:
 
 ### Reverse to pi TUI
 
-Type `pi` with no arguments to open the full [pi](https://github.com/badlogic/pi-mono) TUI. Your conversation carries over — the AI remembers everything from the current session. When you exit, you're back in pish with the updated session.
+Type `pi` with no arguments to open the full [pi](https://github.com/earendil-works/pi) TUI. Your conversation carries over — the AI remembers everything from the current session. When you exit, you're back in pish with the updated session.
 
 > **Tip:** `pi` with any arguments (e.g. `pi --help`, `pi some-file.txt`) is passed straight through to the original pi binary — only bare `pi` activates the session handoff. You can also use `command pi` to bypass pish entirely.
 

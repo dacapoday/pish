@@ -1,6 +1,6 @@
 {
   "name": "@aerode/pish",
-  "version": "0.9.3",
+  "version": "0.10.0",
   "description": "A shell-first pi coding agent",
   "license": "MIT",
   "author": "dacapoday",
@@ -45,7 +45,7 @@
     "postinstall.sh"
   ],
   "dependencies": {
-    "@mariozechner/pi-tui": "^0.65.0",
+    "@earendil-works/pi-tui": "^0.84.0",
     "@xterm/headless": "^6.0.0",
     "node-pty": "^1.0.0"
   },

@@ -5,7 +5,7 @@
  * used across all rendering functions.
  */
 
-import type { MarkdownTheme } from '@mariozechner/pi-tui';
+import type { MarkdownTheme } from '@earendil-works/pi-tui';
 
 // ─── Raw ANSI helpers ───
 

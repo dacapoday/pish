@@ -11,7 +11,7 @@ import {
   type MarkdownTheme,
   Text,
   visibleWidth,
-} from '@mariozechner/pi-tui';
+} from '@earendil-works/pi-tui';
 import type { AgentEvent, AgentUsage, RpcResponse } from './agent.js';
 import { bold, createMarkdownTheme, dim, TAG, theme, toolBg } from './theme.js';
 
@@ -348,6 +348,10 @@ export class StreamRenderer {
   // ─── Thinking ───
 
   private onThinkingStart(): void {
+    // Never inject a newline into an already-streaming text block. If text is
+    // active, a late/spurious thinking_start must not shift the text block,
+    // or the erase-and-redraw line count at text_end will be off by one.
+    if (this.inText) return;
     this.clearSpinner();
     this.inThinking = true;
     process.stderr.write('\n');
@@ -361,6 +365,11 @@ export class StreamRenderer {
   private onThinkingEnd(): void {
     if (!this.inThinking) return;
     this.inThinking = false;
+    // Real pi can deliver thinking_end *after* text has already started
+    // streaming. Injecting a trailing newline + spinner here would add a
+    // physical line that text_end's erase count doesn't account for, leaving
+    // the first text line on screen and duplicating the rendered content.
+    if (this.inText) return;
     process.stderr.write('\n');
     this.restartSpinner();
   }
@@ -465,7 +474,9 @@ export class StreamRenderer {
     const reasonText =
       reason === 'overflow'
         ? 'Context overflow — auto-compacting...'
-        : 'Auto-compacting...';
+        : reason === 'manual'
+          ? 'Compacting...'
+          : 'Auto-compacting...';
     this.stopSpinner = startSpinner(reasonText, this.spinnerInterval);
   }
 
@@ -534,6 +545,11 @@ export class StreamRenderer {
   }
 
   private restartSpinner(): void {
+    // Stop any spinner still running from a previous block before starting a
+    // fresh one. Two consecutive restart triggers (e.g. thinking_end followed
+    // closely by text_end) can otherwise leak the earlier spinner's timer,
+    // leaving a stray "Working..." animating after the run finishes.
+    this.clearSpinner();
     this.stopSpinner = startSpinner('Working...', this.spinnerInterval);
   }
 

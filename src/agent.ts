@@ -130,6 +130,8 @@ export class AgentManager {
   private _submitted = false;
   private startTime = 0;
   private lastUsage: AgentUsage | null = null;
+  /** Most recent agent_end payload — held until agent_settled (may include auto-retries). */
+  private lastEndMsg: Msg | null = null;
   private readonly config: AgentConfig;
   private pendingRpc = new Map<
     string,
@@ -222,8 +224,11 @@ export class AgentManager {
         });
       }
       this.pendingRpc.clear();
+      // A pending agent_end without its agent_settled is an interrupted run.
+      const settling = this.lastEndMsg !== null;
+      this.lastEndMsg = null;
 
-      if (wasActive) {
+      if (wasActive || settling) {
         // Crashed while running or after submit but before agent_start
         this.emitEvent({
           type: 'agent_error',
@@ -314,15 +319,26 @@ export class AgentManager {
         this._submitted = false;
         this.startTime = Date.now();
         this.lastUsage = null;
+        this.lastEndMsg = null;
         break;
 
       case 'agent_end':
+        // Run produced its messages. Defer agent_done until agent_settled
+        // (after any auto-retries) so pish doesn't release the shell early.
         this._running = false;
+        this.lastEndMsg = obj;
+        break;
+
+      case 'agent_settled':
+        // True completion — no further auto-retries scheduled.
         this.emitEvent({
           type: 'agent_done',
           durationMs: Date.now() - this.startTime,
-          usage: this.aggregateUsage(obj),
+          usage: this.lastEndMsg
+            ? this.aggregateUsage(this.lastEndMsg)
+            : (this.lastUsage ?? undefined),
         });
+        this.lastEndMsg = null;
         break;
 
       case 'response': {
@@ -342,14 +358,14 @@ export class AgentManager {
         break;
       }
 
-      case 'auto_compaction_start':
+      case 'compaction_start':
         this.emitEvent({
           type: 'compaction_start',
           reason: str(obj.reason) || 'threshold',
         });
         break;
 
-      case 'auto_compaction_end': {
+      case 'compaction_end': {
         const result = obj.result as Msg | undefined;
         this.emitEvent({
           type: 'compaction_end',
