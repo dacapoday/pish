@@ -45,7 +45,7 @@
     "postinstall.sh"
   ],
   "dependencies": {
-    "@earendil-works/pi-tui": "^0.84.0",
+    "@earendil-works/pi-tui": "^0.87.1",
     "@xterm/headless": "^6.0.0",
     "node-pty": "^1.0.0"
   },
